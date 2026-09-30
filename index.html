@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Step3D — Annotation de la marche</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #0a0f19;
+    color: #dbe4ee;
+    display: grid;
+    grid-template-columns: 250px 1fr 300px;
+    grid-template-rows: 100%;
+  }
+
+  /* ---------- colonnes ---------- */
+  aside, main { display: flex; flex-direction: column; min-height: 0; }
+  #colonne-gauche { background: #0a101c; border-right: 1px solid #18233a; }
+  #colonne-droite { background: #0a101c; border-left: 1px solid #18233a; overflow-y: auto; }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; font-size: 17px; font-weight: bold; color: #fff;
+  }
+  .logo-carre {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: #3d8bfd; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .rubrique {
+    padding: 6px 16px; font-size: 11px; letter-spacing: 1px;
+    color: #5f7189; font-weight: bold;
+  }
+  #liste-sujets { flex: 1; overflow-y: auto; padding-bottom: 8px; }
+
+  .sujet-ligne {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; cursor: pointer; font-size: 14px;
+  }
+  .sujet-ligne:hover { background: #101a2c; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: #1b2a44; color: #7fa4d9;
+  }
+  .badge.vert { background: #123524; color: #4ade80; }
+  .badge.gris { background: #1c2431; color: #8fa0b5; }
+  .badge.jaune { background: #332a12; color: #eab308; }
+  .sujet-bloc[data-ouvert="1"] { background: #0e1626; }
+  .visites { display: none; }
+  .sujet-bloc[data-ouvert="1"] .visites { display: block; }
+  .visite-ligne { padding: 6px 16px 2px 28px; font-size: 13px; color: #9db0c6; }
+  .essai-ligne {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 16px 6px 40px; font-size: 13px; cursor: pointer; color: #c3d0de;
+  }
+  .essai-ligne:hover { background: #152034; }
+  .essai-ligne.actif { background: #1a2a47; color: #fff; }
+  #btn-nouveau-sujet {
+    margin: 8px 12px; padding: 10px; width: calc(100% - 24px);
+    background: #131c2e; color: #c3d0de; border: 1px solid #223050;
+    border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  #btn-nouveau-sujet:hover { background: #182339; }
+
+  #params-essai {
+    border-top: 1px solid #18233a; padding: 12px 16px; font-size: 13px; color: #9db0c6;
+  }
+  #params-essai div { display: flex; justify-content: space-between; margin: 5px 0; }
+  #params-essai span.valeur { color: #e9f0f8; font-weight: bold; }
+
+  /* ---------- centre ---------- */
+  main { min-width: 0; }
+  #barre-haut {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; gap: 12px;
+  }
+  #titre-essai { font-size: 18px; font-weight: bold; color: #fff; }
+  #infos-essai { margin-left: 12px; font-size: 13px; color: #8fa0b5; }
+  button.champ {
+    padding: 8px 14px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: bold; cursor: pointer; color: #fff;
+  }
+  #btn-export { background: #1c2740; }
+  #btn-enregistrer { background: #7b86f7; }
+  #btn-enregistrer.modifie { box-shadow: 0 0 0 2px #2c3654; background: #9aa3ff; }
+
+  #zone-3d { position: relative; flex: 1; min-height: 0; background: #080d15; }
+  #zone-3d canvas { display: block; }
+  #overlay-infos {
+    position: absolute; top: 12px; left: 12px;
+    background: #0e1626ee; border: 1px solid #1c2a44; border-radius: 10px;
+    padding: 10px 14px; font-size: 13px; line-height: 1.7;
+  }
+  #overlay-infos b { font-size: 14px; }
+  #overlay-infos .sol { color: #4ade80; }
+  #overlay-infos .leve { color: #f87171; }
+  #legende {
+    position: absolute; top: 12px; right: 12px;
+    background: #0e1626ee; border: 1px solid #1c2a44; border-radius: 10px;
+    padding: 8px 12px; font-size: 12px; display: flex; gap: 14px;
+  }
+  .pastille { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  #overlay-attente {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #7a8ca3; font-size: 14px;
+  }
+
+  /* ---------- barre de lecture ---------- */
+  #barre-bas { border-top: 1px solid #18233a; padding: 10px 18px 14px; }
+  #controles {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  #controles button.bt {
+    background: #16203a; border: 1px solid #24335a; color: #dfe8f4;
+    border-radius: 8px; padding: 7px 11px; font-size: 13px; cursor: pointer;
+  }
+  #controles button.bt:hover { background: #1d2a4a; }
+  #btn-lecture { background: #4d68f0; border-color: #4d68f0; color: #fff; width: 40px; }
+  #affichage-temps { font-size: 14px; color: #dfe8f4; margin-left: 6px; }
+  #vitesses { margin-left: auto; display: flex; gap: 6px; }
+  #vitesses button.bt { padding: 6px 10px; }
+  #vitesses button.bt.actif { background: #2b3d6e; border-color: #3d55a5; color: #fff; }
+  #curseurs { position: relative; }
+  #plage {
+    width: 100%; margin: 0; accent-color: #7b86f7; height: 18px;
+  }
+  .piste {
+    height: 22px; margin-top: 6px; border-radius: 5px; background: #10182a;
+    position: relative; cursor: pointer;
+  }
+  .piste canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .etiquette-piste {
+    position: absolute; left: 6px; top: 3px; font-size: 11px; color: #6f829c;
+  }
+
+  /* ---------- droite ---------- */
+  .bloc-droit { padding: 14px 16px; border-bottom: 1px solid #18233a; }
+  .titre-bloc {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 10px;
+  }
+  .compteur { font-size: 13px; color: #8fa0b5; font-weight: normal; }
+  .grille-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grille-boutons button {
+    padding: 9px; border: 1px solid #24335a; border-radius: 8px;
+    background: #16203a; color: #dfe8f4; font-size: 13px; font-weight: bold; cursor: pointer;
+  }
+  .grille-boutons button:hover { background: #1d2a4a; }
+  #liste-evenements { margin-top: 12px; max-height: 300px; overflow-y: auto; }
+  .ligne-evenement {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 6px; font-size: 12.5px; cursor: pointer;
+    font-family: 'Consolas', monospace; color: #c3d0de;
+  }
+  .ligne-evenement:hover { background: #131e33; }
+  .ligne-evenement .ic { width: 14px; text-align: center; font-size: 11px; }
+  .ligne-evenement .ic.pose { color: #f59e0b; }
+  .ligne-evenement .ic.lever { color: #34d399; }
+  .ligne-evenement .supp {
+    margin-left: auto; color: #5f7189; cursor: pointer; padding: 0 4px; font-size: 13px;
+  }
+  .ligne-evenement .supp:hover { color: #f87171; }
+  #liens-outils { margin-top: 10px; }
+  #btn-preremplir {
+    background: none; border: 1px dashed #2a3a5c; color: #7fa4d9;
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; width: 100%;
+  }
+  #btn-preremplir:hover { background: #131e33; }
+  .boite-raccourcis {
+    border: 1px solid #1c2a44; border-radius: 10px; padding: 12px; font-size: 12.5px;
+  }
+  .boite-raccourcis .titre { font-weight: bold; color: #e9f0f8; margin-bottom: 8px; font-size: 13px; }
+  .ligne-raccourci { display: flex; align-items: flex-start; gap: 10px; margin: 7px 0; color: #9db0c6; }
+  .touche {
+    background: #16203a; border: 1px solid #2c3d63; border-bottom-width: 2px;
+    border-radius: 5px; padding: 2px 7px; font-size: 11px; color: #e9f0f8;
+    font-family: 'Consolas', monospace; min-width: 34px; text-align: center; flex-shrink: 0;
+  }
+  #message-erreur { padding: 10px 16px; color: #f87171; font-size: 13px; display: none; }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #1c2a44; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<aside id="colonne-gauche">
+  <div class="logo"><span class="logo-carre">S</span> Step3D</div>
+  <div class="rubrique">SUJETS</div>
+  <div id="liste-sujets">Chargement…</div>
+  <button id="btn-nouveau-sujet">+ Nouveau sujet</button>
+  <div id="params-essai" hidden>
+    <div class="rubrique" style="padding:0 0 4px;">Paramètres de l'essai</div>
+    <div>Cadence <span class="valeur" id="p-cadence">—</span></div>
+    <div>Appui G <span class="valeur" id="p-appui-g">—</span></div>
+    <div>Appui D <span class="valeur" id="p-appui-d">—</span></div>
+  </div>
+</aside>
+
+<main>
+  <div id="barre-haut">
+    <div>
+      <span id="titre-essai">Choisissez un essai</span>
+      <span id="infos-essai"></span>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="champ" id="btn-export">⇩ Export Excel</button>
+      <button class="champ" id="btn-enregistrer" disabled>Enregistrer</button>
+    </div>
+  </div>
+  <div id="zone-3d">
+    <div id="overlay-attente">Aucun essai sélectionné</div>
+    <div id="overlay-infos" hidden></div>
+    <div id="legende" hidden>
+      <span><span class="pastille" style="background:#3ec3e8"></span>Gauche</span>
+      <span><span class="pastille" style="background:#f0923a"></span>Droit</span>
+      <span><span class="pastille" style="background:#9aa7b5"></span>Bassin</span>
+    </div>
+  </div>
+  <div id="barre-bas" hidden>
+    <div id="controles">
+      <button class="bt" id="bt-debut" title="Première image">⏮</button>
+      <button class="bt" id="bt-moins1" title="Image précédente">◀ 1</button>
+      <button class="bt" id="btn-lecture" title="Lecture / pause">▶</button>
+      <button class="bt" id="bt-plus1" title="Image suivante">1 ▶</button>
+      <button class="bt" id="bt-fin" title="Dernière image">⏭</button>
+      <span id="affichage-temps">00:00,00</span>
+      <div id="vitesses">
+        <button class="bt" data-v="0.25">¼×</button>
+        <button class="bt" data-v="0.5">½×</button>
+        <button class="bt actif" data-v="1">1×</button>
+        <button class="bt" data-v="2">2×</button>
+      </div>
+    </div>
+    <div id="curseurs">
+      <input type="range" id="plage" min="0" max="0" value="0" step="1">
+      <div class="piste" id="piste-g"><canvas></canvas><span class="etiquette-piste">G</span></div>
+      <div class="piste" id="piste-d"><canvas></canvas><span class="etiquette-piste">D</span></div>
+    </div>
+  </div>
+  <div id="message-erreur"></div>
+</main>
+
+<aside id="colonne-droite">
+  <div class="bloc-droit">
+    <div class="titre-bloc">Événements <span class="compteur" id="compteur-evenements">0</span></div>
+    <div class="grille-boutons">
+      <button id="bt-pose-g">▼ Pose G</button>
+      <button id="bt-lever-g">▲ Lever G</button>
+      <button id="bt-pose-d">▼ Pose D</button>
+      <button id="bt-lever-d">▲ Lever D</button>
+    </div>
+    <div id="liste-evenements"></div>
+    <div id="liens-outils"><button id="btn-preremplir">Pré-remplir depuis contact_sol</button></div>
+  </div>
+  <div class="bloc-droit">
+    <div class="boite-raccourcis">
+      <div class="titre">Raccourcis</div>
+      <div class="ligne-raccourci"><span class="touche">Espace</span> lecture / pause</div>
+      <div class="ligne-raccourci"><span class="touche">Q</span> <span class="touche">D</span> image précédente / suivante</div>
+      <div class="ligne-raccourci"><span class="touche">S</span> <span class="touche">Z</span> 10 images en arrière / en avant</div>
+      <div class="ligne-raccourci"><span class="touche">W</span> pose puis lever du pied gauche</div>
+      <div class="ligne-raccourci"><span class="touche">B</span> pose puis lever du pied droit</div>
+      <div class="ligne-raccourci"><span class="touche">Ctrl Z</span> annuler</div>
+    </div>
+  </div>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============ base de données ============ */
+const base = window.supabase.createClient(
+  'https://obclhzckhzrzhwcucmns.supabase.co',
+  'sb_publishable_ItMOm6PP54etudgIya_BNQ_6h-_iRh2'
+);
+
+/* ============ constantes ============ */
+const COULEURS = { gauche: 0x3ec3e8, droit: 0xf0923a, bassin: 0x9aa7b5 };
+const MARQUEURS_BASSIN = ['L_IAS', 'L_IPS', 'R_IPS', 'R_IAS'];
+const NOMS_MARQUEURS = [
+  'L_IAS','L_IPS','R_IPS','R_IAS',
+  'L_FTC','L_FLE','L_FAX','L_TTC','L_FAL','L_FCC','L_FM1','L_FM5',
+  'R_FTC','R_FLE','R_FAX','R_TTC','R_FAL','R_FCC','R_FM1','R_FM5'
+];
+const LIAISONS = [
+  ['L_IAS','L_IPS'], ['L_IPS','R_IPS'], ['R_IPS','R_IAS'], ['R_IAS','L_IAS'],
+  ['L_IAS','L_FTC'], ['R_IAS','R_FTC'],
+  ['L_FTC','L_FLE'], ['L_FLE','L_FAX'], ['L_FAX','L_FCC'], ['L_FCC','L_FM1'], ['L_FM1','L_FM5'], ['L_FM5','L_FCC'], ['L_FAX','L_FAL'],
+  ['R_FTC','R_FLE'], ['R_FLE','R_FAX'], ['R_FAX','R_FCC'], ['R_FCC','R_FM1'], ['R_FM1','R_FM5'], ['R_FM5','R_FCC'], ['R_FAX','R_FAL']
+];
+const SEUIL_ORIGINE = 1e-6; // un marqueur (presque) exactement en (0,0,0) n'est pas capté
+
+/* ============ état ============ */
+let structure = { sujets: [] };        // liste des sujets/visites/essais chargée de la base
+let essai = null;                      // essai affiché : {meta, json, evenements[]}
+let imageCourante = 0;
+let enLecture = false;
+let vitesse = 1;
+let modifNonEnregistrees = false;
+let pileAnnulation = [];
+
+/* ============ helpers ============ */
+const $ = id => document.getElementById(id);
+function echapper(t) { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
+function formaterDate(dateIso) {
+  if (!dateIso) return '';
+  const [a, m, j] = dateIso.split('-');
+  return j + '/' + m + '/' + a;
+}
+function formaterTemps(s) {
+  const mn = Math.floor(s / 60), sec = s - mn * 60;
+  return String(mn).padStart(2, '0') + ':' + sec.toFixed(2).padStart(5, '0').replace('.', ',');
+}
+function captee(p) { return !(Math.abs(p[0]) < SEUIL_ORIGINE && Math.abs(p[1]) < SEUIL_ORIGINE && Math.abs(p[2]) < SEUIL_ORIGINE); }
+function afficherErreur(texte) {
+  const b = $('message-erreur');
+  if (!texte) { b.style.display = 'none'; return; }
+  b.textContent = texte; b.style.display = 'block';
+}
+
+/* ============ scène 3D ============ */
+const zone = $('zone-3d');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080d15);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+camera.position.set(0, 1.8, 5);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+zone.appendChild(renderer.domElement);
+const controles3d = new OrbitControls(camera, renderer.domElement);
+controles3d.enableDamping = true;
+
+// sol : grille discrète + plateforme ronde
+const grille = new THREE.GridHelper(20, 40, 0x1c2938, 0x141d2c);
+scene.add(grille);
+const plateforme = new THREE.Mesh(
+  new THREE.CircleGeometry(1.6, 64),
+  new THREE.MeshBasicMaterial({ color: 0x0d1524 })
+);
+plateforme.rotation.x = -Math.PI / 2;
+plateforme.position.y = 0.001;
+scene.add(plateforme);
+
+// sphères des marqueurs
+const geometrieSphere = new THREE.SphereGeometry(0.028, 16, 12);
+const spheres = {};
+for (const nom of NOMS_MARQUEURS) {
+  const cote = nom.startsWith('L_') ? (MARQUEURS_BASSIN.includes(nom) ? 'bassin' : 'gauche')
+                                    : (MARQUEURS_BASSIN.includes(nom) ? 'bassin' : 'droit');
+  const mat = new THREE.MeshBasicMaterial({ color: COULEURS[cote] });
+  const s = new THREE.Mesh(geometrieSphere, mat);
+  s.visible = false;
+  scene.add(s);
+  spheres[nom] = s;
+}
+
+// segments du squelette
+const materiauLiaison = new THREE.LineBasicMaterial({ color: 0x54637a, transparent: true, opacity: 0.7 });
+const liaisons = LIAISONS.map(() => {
+  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const l = new THREE.Line(g, materiauLiaison);
+  l.visible = false;
+  scene.add(l);
+  return l;
+});
+
+// trajectoires passées des chevilles
+const materiauTraceG = new THREE.LineBasicMaterial({ color: COULEURS.gauche, transparent: true, opacity: 0.3 });
+const materiauTraceD = new THREE.LineBasicMaterial({ color: COULEURS.droit, transparent: true, opacity: 0.3 });
+function creerTrace(materiau) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+  const l = new THREE.Line(g, materiau);
+  l.visible = false;
+  l.frustumCulled = false;
+  scene.add(l);
+  return l;
+}
+const traceG = creerTrace(materiauTraceG), traceD = creerTrace(materiauTraceD);
+
+function redimensionner() {
+  const l = zone.clientWidth, h = zone.clientHeight;
+  if (!l || !h) return;
+  camera.aspect = l / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(l, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+}
+window.addEventListener('resize', redimensionner);
+
+function animer() {
+  requestAnimationFrame(animer);
+  if (essai && enLecture) avancerLecture();
+  controles3d.update();
+  renderer.render(scene, camera);
+}
+
+/* ============ affichage d'une image ============ */
+function afficherImage(f) {
+  if (!essai) return;
+  const nb = essai.json.nb_images;
+  f = Math.max(0, Math.min(nb - 1, f));
+  imageCourante = f;
+
+  // positionnement des sphères (z du fichier = hauteur)
+  for (const nom of NOMS_MARQUEURS) {
+    const p = essai.json.marqueurs[nom][f];
+    const s = spheres[nom];
+    const ok = captee(p);
+    s.visible = ok;
+    if (ok) s.position.set(p[0], p[2], p[1]);
+  }
+  // liaisons
+  LIAISONS.forEach(([a, b], i) => {
+    const l = liaisons[i];
+    const ok = spheres[a].visible && spheres[b].visible;
+    l.visible = ok;
+    if (ok) {
+      const pos = l.geometry.attributes.position;
+      pos.setXYZ(0, spheres[a].position.x, spheres[a].position.y, spheres[a].position.z);
+      pos.setXYZ(1, spheres[b].position.x, spheres[b].position.y, spheres[b].position.z);
+      pos.needsUpdate = true;
+    }
+  });
+  dessinerTraces();
+  majOverlay();
+  majPistes();
+  $('plage').value = f;
+  $('affichage-temps').textContent = formaterTemps(f / essai.json.frequence_hz);
+}
+
+function dessinerTraces() {
+  for (const [trace, nom] of [[traceG, 'L_FAX'], [traceD, 'R_FAX']]) {
+    const pts = essai.json.marqueurs[nom];
+    const n = imageCourante + 1;
+    const table = new Float32Array(n * 3);
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      if (!captee(p)) continue;
+      table[k++] = p[0]; table[k++] = p[2]; table[k++] = p[1];
+    }
+    trace.geometry.setAttribute('position', new THREE.BufferAttribute(table.slice(0, k), 3));
+    trace.visible = k >= 6; // au moins 2 points
+  }
+}
+
+function majOverlay() {
+  const o = $('overlay-infos');
+  const cs = essai.json.contact_sol;
+  o.hidden = false;
+  o.innerHTML =
+    '<b>Image ' + (imageCourante + 1) + '</b> / ' + essai.json.nb_images +
+    ' · ' + (imageCourante / essai.json.frequence_hz).toFixed(2).replace('.', ',') + ' s<br>' +
+    'Pied gauche : <span class="' + (cs.gauche[imageCourante] ? 'sol' : 'leve') + '">' +
+      (cs.gauche[imageCourante] ? 'au sol' : 'levé') + '</span><br>' +
+    'Pied droit : <span class="' + (cs.droit[imageCourante] ? 'sol' : 'leve') + '">' +
+      (cs.droit[imageCourante] ? 'au sol' : 'levé') + '</span>';
+}
+
+/* ============ pistes contact_sol (G / D) ============ */
+function dessinerPiste(canvas, serie, couleur) {
+  const l = canvas.clientWidth, h = canvas.clientHeight;
+  if (!l) return;
+  canvas.width = l * 2; canvas.height = h * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.clearRect(0, 0, l, h);
+  const nb = serie.length;
+  const x = i => i / (nb - 1) * l;
+  let i = 0;
+  while (i < nb) {
+    if (serie[i]) {
+      let j = i;
+      while (j < nb && serie[j]) j++;
+      const x1 = x(i), x2 = x(j - 1);
+      ctx.fillStyle = couleur;
+      ctx.beginPath();
+      ctx.moveTo(x1 + 2, h - 3); ctx.lineTo(x2 - 1, h - 3);
+      ctx.lineTo(x2 - 1, 3); ctx.lineTo(x1 + 2, 3);
+      ctx.closePath(); ctx.fill();
+      i = j;
+    } else i++;
+  }
+  // repère des événements posés
+  for (const ev of essai.evenements) {
+    if ((serie === essai.json.contact_sol.gauche) !== (ev.pied === 'gauche')) continue;
+    ctx.fillStyle = '#ffffffcc';
+    ctx.fillRect(x(ev.image) - 1, 0, 2, h);
+  }
+  // curseur de position
+  ctx.fillStyle = '#e9f0f8';
+  ctx.fillRect(x(imageCourante) - 1, 0, 2, h);
+}
+function majPistes() {
+  dessinerPiste($('piste-g').querySelector('canvas'), essai.json.contact_sol.gauche, '#2f8fb5');
+  dessinerPiste($('piste-d').querySelector('canvas'), essai.json.contact_sol.droit, '#c47a33');
+}
+
+/* ============ lecture ============ */
+let dernierTemps = 0;
+function avancerLecture() {
+  const maintenant = performance.now();
+  const delta = (maintenant - dernierTemps) / 1000;
+  if (delta >= 1 / (essai.json.frequence_hz * vitesse)) {
+    dernierTemps = maintenant;
+    if (imageCourante >= essai.json.nb_images - 1) { basculerLecture(false); return; }
+    afficherImage(imageCourante + 1);
+  }
+}
+function basculerLecture(on) {
+  enLecture = on ?? !enLecture;
+  $('btn-lecture').textContent = enLecture ? '⏸' : '▶';
+  if (enLecture) dernierTemps = performance.now();
+}
+
+/* ============ événements (pose / lever) ============ */
+function trierEvents() { essai.evenements.sort((a, b) => a.image - b.image || a.pied.localeCompare(b.pied)); }
+
+function pousserAnnulation() {
+  pileAnnulation.push(JSON.stringify(essai.evenements));
+  if (pileAnnulation.length > 100) pileAnnulation.shift();
+  signalerModif();
+}
+
+function placerEvenement(pied, type) {
+  if (!essai) return;
+  pousserAnnulation();
+  const deja = essai.evenements.find(e => e.pied === pied && e.type === type);
+  if (deja) {
+    if (deja.image === imageCourante) { pileAnnulation.pop(); signalerModif(); return; }
+    deja.image = imageCourante; // corriger : déplacer l'événement existant
+  } else {
+    essai.evenements.push({ pied, type, image: imageCourante });
+  }
+  trierEvents(); majListeEvents(); majPistes(); signalerModif();
+}
+
+// W / B : premier appui = pose, second = lever, puis ça recommence
+function evenementRapide(pied) {
+  if (!essai) return;
+  pousserAnnulation();
+  const avant = essai.evenements
+    .filter(e => e.pied === pied && e.image <= imageCourante)
+    .sort((a, b) => b.image - a.image)[0];
+  placerEvenementSansAnnuler(pied, (!avant || avant.type === 'lever') ? 'pose' : 'lever');
+}
+function placerEvenementSansAnnuler(pied, type) {
+  const deja = essai.evenements.find(e => e.pied === pied && e.type === type);
+  if (deja) deja.image = imageCourante;
+  else essai.evenements.push({ pied, type, image: imageCourante });
+  trierEvents(); majListeEvents(); majPistes(); signalerModif();
+}
+
+function supprimerEvenement(index) {
+  pousserAnnulation();
+  essai.evenements.splice(index, 1);
+  majListeEvents(); majPistes(); signalerModif();
+}
+
+function annuler() {
+  if (!pileAnnulation.length || !essai) return;
+  essai.evenements = JSON.parse(pileAnnulation.pop());
+  modifNonEnregistrees = pileAnnulation.length > 0 || true; // simplification : rester "modifié"
+  majListeEvents(); majPistes(); signalerModif();
+}
+
+function signalerModif() {
+  modifNonEnregistrees = true;
+  $('btn-enregistrer').classList.add('modifie');
+}
+
+function majListeEvents() {
+  const c = $('liste-evenements');
+  $('compteur-evenements').textContent = essai ? essai.evenements.length : 0;
+  if (!essai) { c.innerHTML = ''; return; }
+  c.innerHTML = essai.evenements.map((e, i) => {
+    const libelle = (e.pied === 'gauche' ? 'G' : 'D') + ' · ' + (e.type === 'pose' ? 'Pose' : 'Lever');
+    const ic = e.type === 'pose' ? '▼' : '▲';
+    const couleur = e.pied === 'gauche' ? '#3ec3e8' : '#f0923a';
+    return '<div class="ligne-evenement" data-i="' + i + '">' +
+      '<span class="ic ' + e.type + '">' + ic + '</span>' +
+      '<span style="color:' + couleur + '">' + libelle + '</span>' +
+      '<span>img ' + e.image + '</span><span>· ' +
+      (e.image / essai.json.frequence_hz).toFixed(2).replace('.', ',') + ' s</span>' +
+      '<span class="supp" title="Supprimer">×</span></div>';
+  }).join('') || '<div style="color:#5f7189;font-size:12.5px;padding:4px 8px;">Aucun événement. Naviguez jusqu\'à l\'instant voulu puis cliquez sur Pose / Lever, ou pré-remplissez depuis contact_sol.</div>';
+  for (const ligne of c.querySelectorAll('.ligne-evenement')) {
+    const i = Number(ligne.dataset.i);
+    ligne.addEventListener('click', (e) => {
+      if (e.target.classList.contains('supp')) { supprimerEvenement(i); return; }
+      afficherImage(essai.evenements[i].image);
+    });
+  }
+}
+
+/* ============ pré-remplissage depuis contact_sol ============ */
+$('btn-preremplir').addEventListener('click', () => {
+  if (!essai) return;
+  pousserAnnulation();
+  const cs = essai.json.contact_sol;
+  for (const pied of ['gauche', 'droit']) {
+    const serie = cs[pied];
+    let precedent = 0;
+    for (let i = 0; i < serie.length; i++) {
+      if (serie[i] === 1 && precedent === 0) {
+        const deja = essai.evenements.find(e => e.pied === pied && e.type === 'pose' && e.image === i);
+        if (!deja) essai.evenements.push({ pied, type: 'pose', image: i });
+      }
+      if (serie[i] === 0 && precedent === 1) {
+        const deja = essai.evenements.find(e => e.pied === pied && e.type === 'lever' && e.image === i);
+        if (!deja) essai.evenements.push({ pied, type: 'lever', image: i });
+      }
+      precedent = serie[i];
+    }
+  }
+  trierEvents(); majListeEvents(); majPistes(); signalerModif();
+});
+
+/* ============ enregistrement en base ============ */
+$('btn-enregistrer').addEventListener('click', async () => {
+  if (!essai) return;
+  const bouton = $('btn-enregistrer');
+  bouton.disabled = true;
+  bouton.textContent = 'Enregistrement…';
+  const effacement = await base.from('evenement').delete().eq('id_essai', essai.meta.id_essai);
+  if (effacement.error) { afficherErreur('Erreur d\'enregistrement : ' + effacement.error.message); remettreBouton(); return; }
+  if (essai.evenements.length) {
+    const insertion = await base.from('evenement').insert(
+      essai.evenements.map(e => ({
+        id_essai: essai.meta.id_essai, pied: e.pied, type: e.type,
+        image: e.image, temps_s: e.image / essai.json.frequence_hz
+      }))
+    );
+    if (insertion.error) { afficherErreur('Erreur d\'enregistrement : ' + insertion.error.message); remettreBouton(); return; }
+  }
+  modifNonEnregistrees = false;
+  pileAnnulation = [];
+  remettreBouton();
+  afficherErreur('');
+  await chargerStructure();       // rafraîchit les badges "annoté"
+  marquerEssaiActif();
+  function remettreBouton() { bouton.disabled = false; bouton.textContent = 'Enregistrer'; bouton.classList.remove('modifie'); }
+});
+
+/* ============ export Excel (CSV) ============ */
+$('btn-export').addEventListener('click', () => {
+  if (!essai) return;
+  const lignes = ['Sujet;Visite;Essai;Pied;Type;Image;Temps (s)'];
+  for (const e of essai.evenements) {
+    lignes.push([essai.meta.code_sujet, essai.meta.numero_visite, essai.meta.numero,
+      e.pied, e.type, e.image, (e.image / essai.json.frequence_hz).toFixed(2)].join(';'));
+  }
+  const blob = new Blob(['﻿' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = essai.meta.fichier.replace('.json', '_evenements.csv');
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ============ structure (sujets / visites / essais) ============ */
+async function chargerStructure() {
+  const { data: sujets, error: e1 } = await base.from('sujet').select('id_sujet, code').order('code');
+  if (e1) { afficherErreur('Impossible de charger les sujets : ' + e1.message); return; }
+  const { data: visites, error: e2 } = await base.from('visite').select('id_visite, id_sujet, numero, date_visite').order('numero');
+  if (e2) { afficherErreur('Impossible de charger les visites : ' + e2.message); return; }
+  const { data: essais, error: e3 } = await base.from('essai').select('id_essai, id_visite, numero, fichier, frequence_hz, nb_images').order('numero');
+  if (e3) { afficherErreur('Impossible de charger les essais : ' + e3.message); return; }
+  const { data: compte, error: e4 } = await base.from('evenement').select('id_essai');
+  if (e4) { afficherErreur('Impossible de charger les événements : ' + e4.message); return; }
+  const nbEvents = {};
+  for (const ev of compte) nbEvents[ev.id_essai] = (nbEvents[ev.id_essai] || 0) + 1;
+
+  structure.sujets = sujets.map(s => ({
+    ...s,
+    visites: visites.filter(v => v.id_sujet === s.id_sujet).map(v => ({
+      ...v,
+      essais: essais.filter(e => e.id_visite === v.id_visite).map(e => ({ ...e, annote: (nbEvents[e.id_essai] || 0) > 0 }))
+    }))
+  }));
+  dessinerStructure();
+}
+
+function dessinerStructure() {
+  const c = $('liste-sujets');
+  // on retient les sujets ouverts pour ne pas les refermer au rafraîchissement
+  const ouverts = new Set(
+    [...c.querySelectorAll('.sujet-bloc[data-ouvert="1"]')].map(b => b.dataset.id)
+  );
+  if (!structure.sujets.length) { c.innerHTML = '<div style="padding:8px 16px;color:#5f7189;font-size:13px;">Aucun sujet. Cliquez sur « + Nouveau sujet ».</div>'; return; }
+  c.innerHTML = structure.sujets.map(s => {
+    const nbEssais = s.visites.reduce((n, v) => n + v.essais.length, 0);
+    return '<div class="sujet-bloc" data-id="' + s.id_sujet + '"' +
+      (ouverts.has(String(s.id_sujet)) ? ' data-ouvert="1"' : '') + '>' +
+      '<div class="sujet-ligne"><span>' + echapper(s.code) + '</span>' +
+      '<span class="badge">' + nbEssais + ' essai' + (nbEssais > 1 ? 's' : '') + '</span></div>' +
+      '<div class="visites">' +
+      s.visites.map(v =>
+        '<div class="visite-ligne">Visite ' + v.numero +
+        (v.date_visite ? ' · ' + formaterDate(v.date_visite) : '') + '</div>' +
+        v.essais.map(e =>
+          '<div class="essai-ligne" data-id="' + e.id_essai + '"><span>Essai ' + e.numero + '</span>' +
+          '<span class="badge ' + (e.annote ? 'vert' : 'jaune') + '">' + (e.annote ? 'annoté' : 'à faire') + '</span></div>'
+        ).join('')
+      ).join('') + '</div></div>';
+  }).join('');
+  for (const bloc of c.querySelectorAll('.sujet-bloc')) {
+    bloc.querySelector('.sujet-ligne').addEventListener('click', () => {
+      bloc.dataset.ouvert = bloc.dataset.ouvert === '1' ? '0' : '1';
+    });
+  }
+  for (const ligne of c.querySelectorAll('.essai-ligne')) {
+    ligne.addEventListener('click', () => ouvrirEssai(Number(ligne.dataset.id)));
+  }
+}
+
+function marquerEssaiActif() {
+  for (const l of document.querySelectorAll('.essai-ligne')) {
+    l.classList.toggle('actif', Number(l.dataset.id) === essai?.meta?.id_essai);
+  }
+}
+
+/* ============ ouverture d'un essai ============ */
+async function ouvrirEssai(idEssai) {
+  const meta = structure.sujets.flatMap(s => s.visites.flatMap(v => v.essais)).find(e => e.id_essai === idEssai);
+  if (!meta) return;
+  $('overlay-attente').textContent = 'Chargement de l\'essai…';
+  $('overlay-attente').style.display = 'flex';
+  const reponse = await fetch('essais/' + meta.fichier);
+  if (!reponse.ok) {
+    $('overlay-attente').textContent = '';
+    afficherErreur('Impossible de charger le fichier ' + meta.fichier + ' (' + reponse.status + ').');
+    return;
+  }
+  const json = await reponse.json();
+  const { data: events, error } = await base.from('evenement')
+    .select('id_evenement, pied, type, image').eq('id_essai', idEssai).order('image');
+  if (error) { afficherErreur('Impossible de charger les événements : ' + error.message); return; }
+
+  const parent = structure.sujets
+    .flatMap(s => s.visites.map(v => ({ s, v })))
+    .find(x => x.v.id_visite === meta.id_visite);
+  essai = {
+    meta: { ...meta, code_sujet: parent?.s?.code, numero_visite: parent?.v?.numero },
+    json, evenements: events.map(e => ({ pied: e.pied, type: e.type, image: e.image }))
+  };
+
+  $('overlay-attente').style.display = 'none';
+  $('legende').hidden = false;
+  $('barre-bas').hidden = false;
+  $('params-essai').hidden = false;
+  $('btn-enregistrer').disabled = false;
+  $('btn-enregistrer').classList.remove('modifie');
+  $('plage').max = json.nb_images - 1;
+  $('titre-essai').textContent = essai.meta.code_sujet + ' · Visite ' + essai.meta.numero_visite + ' · Essai ' + meta.numero;
+  $('infos-essai').textContent = json.nb_images + ' images · ' + json.frequence_hz + ' Hz · ' +
+    (json.nb_images / json.frequence_hz).toFixed(1).replace('.', ',') + ' s';
+
+  // paramètres de l'essai (cadence et appuis calculés depuis contact_sol)
+  const cs = json.contact_sol;
+  const nbAppuis = { gauche: 0, droit: 0 };
+  for (const pied of ['gauche', 'droit']) {
+    let avant = 0;
+    for (const v of cs[pied]) {
+      if (v === 1 && avant === 0) nbAppuis[pied]++;
+      avant = v;
+    }
+  }
+  const dureeMn = json.nb_images / json.frequence_hz / 60;
+  $('p-cadence').textContent = Math.round((nbAppuis.gauche + nbAppuis.droit) / dureeMn) + ' pas/min';
+  for (const [pied, cible] of [['gauche', 'p-appui-g'], ['droit', 'p-appui-d']]) {
+    const nb1 = cs[pied].filter(v => v === 1).length;
+    $(cible).textContent = Math.round(nb1 / json.nb_images * 100) + ' %';
+  }
+
+  modifNonEnregistrees = false;
+  pileAnnulation = [];
+  basculerLecture(false);
+  majListeEvents();
+  marquerEssaiActif();
+  afficherImage(0);
+  redimensionner();
+  cadrerCamera();
+}
+
+function cadrerCamera() {
+  // centre la caméra sur les marqueurs de la première image
+  let cx = 0, cy = 0, n = 0;
+  for (const nom of NOMS_MARQUEURS) {
+    const p = essai.json.marqueurs[nom][0];
+    if (captee(p)) { cx += p[0]; cy += p[2]; n++; }
+  }
+  if (n) controles3d.target.set(cx / n, cy / n, 0);
+  camera.position.set(controles3d.target.x, controles3d.target.y + 1.2, controles3d.target.z + 4.5);
+}
+
+/* ============ contrôles ============ */
+$('btn-lecture').addEventListener('click', () => basculerLecture());
+$('bt-debut').addEventListener('click', () => afficherImage(0));
+$('bt-fin').addEventListener('click', () => afficherImage(essai.json.nb_images - 1));
+$('bt-moins1').addEventListener('click', () => afficherImage(imageCourante - 1));
+$('bt-plus1').addEventListener('click', () => afficherImage(imageCourante + 1));
+$('plage').addEventListener('input', e => afficherImage(Number(e.target.value)));
+for (const b of $('vitesses').querySelectorAll('button')) {
+  b.addEventListener('click', () => {
+    vitesse = Number(b.dataset.v);
+    for (const x of $('vitesses').querySelectorAll('button')) x.classList.toggle('actif', x === b);
+  });
+}
+for (const id of ['piste-g', 'piste-d']) {
+  $(id).addEventListener('click', e => {
+    if (!essai) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const f = Math.round((e.clientX - rect.left) / rect.width * (essai.json.nb_images - 1));
+    afficherImage(f);
+  });
+}
+$('bt-pose-g').addEventListener('click', () => placerEvenement('gauche', 'pose'));
+$('bt-lever-g').addEventListener('click', () => placerEvenement('gauche', 'lever'));
+$('bt-pose-d').addEventListener('click', () => placerEvenement('droit', 'pose'));
+$('bt-lever-d').addEventListener('click', () => placerEvenement('droit', 'lever'));
+
+$('btn-nouveau-sujet').addEventListener('click', async () => {
+  const code = prompt('Code du nouveau sujet (par exemple S04) :');
+  if (!code) return;
+  const { error } = await base.from('sujet').insert({ code: code.trim().toUpperCase() });
+  if (error) { afficherErreur('Impossible d\'ajouter le sujet : ' + error.message); return; }
+  await chargerStructure();
+});
+
+/* ============ clavier ============ */
+window.addEventListener('keydown', e => {
+  if (!essai) return;
+  const t = e.target.tagName;
+  if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey && k === 'z') { e.preventDefault(); annuler(); return; }
+  switch (k) {
+    case ' ': e.preventDefault(); basculerLecture(); break;
+    case 'q': case 'arrowleft': afficherImage(imageCourante - 1); break;
+    case 'd': case 'arrowright': afficherImage(imageCourante + 1); break;
+    case 'z': case 'arrowup': afficherImage(imageCourante + 10); break;
+    case 's': case 'arrowdown': afficherImage(imageCourante - 10); break;
+    case 'w': evenementRapide('gauche'); break;
+    case 'b': evenementRapide('droit'); break;
+  }
+});
+
+/* ============ démarrage ============ */
+redimensionner();
+animer();
+chargerStructure();
+</script>
+</body>
+</html>
